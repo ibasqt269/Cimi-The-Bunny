@@ -19,7 +19,7 @@ function MiniCimiSvg({ mode }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 96 80"
-      className="w-[78px] h-[66px] drop-shadow-[0_4px_6px_rgba(15,23,42,0.22)]"
+      className="w-[52px] h-[44px] sm:w-[78px] sm:h-[66px] drop-shadow-[0_4px_6px_rgba(15,23,42,0.22)]"
       aria-hidden="true"
     >
       {/* Subtle ground shadow */}
@@ -201,7 +201,8 @@ export default function CimiWalker({ visible = true, feedSignal = 0, onHide }) {
       const curMode = stateRef.current.mode;
       if (curMode === 'walk' || curMode === 'excited') {
         const speed = curMode === 'excited' ? 105 : 44;
-        const maxBound = Math.max(120, window.innerWidth - 96);
+        const marginRight = window.innerWidth < 640 ? 64 : 96;
+        const maxBound = Math.max(96, window.innerWidth - marginRight);
         let nextX = stateRef.current.x + stateRef.current.dir * speed * dt;
         let nextDir = stateRef.current.dir;
 
@@ -299,7 +300,7 @@ export default function CimiWalker({ visible = true, feedSignal = 0, onHide }) {
               initial={{ opacity: 0, y: 8, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.92 }}
-              className="absolute bottom-[74px] left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1 rounded-full bg-white text-slate-800 text-[11px] font-bold shadow-lg border border-slate-200 pointer-events-none"
+              className="absolute bottom-[50px] sm:bottom-[74px] left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 sm:px-3 py-1 rounded-full bg-white text-slate-800 text-[10px] sm:text-[11px] font-bold shadow-lg border border-slate-200 pointer-events-none"
             >
               {speech.text}
             </motion.div>
@@ -307,7 +308,7 @@ export default function CimiWalker({ visible = true, feedSignal = 0, onHide }) {
         </AnimatePresence>
 
         {/* Floating Hearts on Click / Feed */}
-        <div className="absolute inset-x-0 bottom-12 flex justify-center pointer-events-none">
+        <div className="absolute inset-x-0 bottom-8 sm:bottom-12 flex justify-center pointer-events-none">
           {hearts.map((h) => (
             <motion.span
               key={h.id}

@@ -7,18 +7,18 @@ export const DEFAULT_DATA = {
   showStamp: true,
   registrationNo: 'No. 3173-BUN-2026-0001',
   photo: DEFAULT_PHOTO_PATH,
-  fullName: 'Mochi Gemoy',
-  nickname: 'Mochi / Si Gembul',
+  fullName: 'Cimi Gemoy',
+  nickname: 'Cimi / Si Gembul',
   breed: 'Holland Lop',
   gender: 'Betina',
   birthPlaceDate: 'Jakarta, 7 Januari 2026',
   coatEyeColor: 'Abu-Abu Chinchilla, Mata Hitam Bulat',
-  specialMarks: 'Telinga jatuh gemas, suka pita biru, hobi menghentakkan kaki',
-  pawrentName: 'Bunda & Ayah Mochi',
+  specialMarks: 'Satu telinga jatuh sebelah, suka pita biru, hobi menghentakkan kaki',
+  pawrentName: 'Bunda & Ayah Cimi',
   issueCity: 'Jakarta',
   issueDate: '23 November 2026',
   officialTitle: 'Kepala Dinas Perkelincian / Pawrent',
-  signatureName: 'Pawrent Mochi',
+  signatureName: 'Pawrent Cimi',
   qrText: 'https://tiktok.com/@cimi.hollandlop',
 
   // Sisi Belakang
@@ -93,6 +93,19 @@ export function loadSavedData() {
         ? DEFAULT_DATA.birthPlaceDate
         : parsed.birthPlaceDate;
 
+    const migratedFullName =
+      parsed.fullName === 'Mochi Gemoy' ? DEFAULT_DATA.fullName : parsed.fullName;
+    const migratedNickname =
+      parsed.nickname === 'Mochi / Si Gembul' ? DEFAULT_DATA.nickname : parsed.nickname;
+    const migratedPawrent =
+      parsed.pawrentName === 'Bunda & Ayah Mochi'
+        ? DEFAULT_DATA.pawrentName
+        : parsed.pawrentName;
+    const migratedSignature =
+      parsed.signatureName === 'Pawrent Mochi'
+        ? DEFAULT_DATA.signatureName
+        : parsed.signatureName;
+
     return {
       ...DEFAULT_DATA,
       ...parsed,
@@ -100,6 +113,10 @@ export function loadSavedData() {
       ...(typeof migratedBirthDate === 'string'
         ? { birthPlaceDate: migratedBirthDate }
         : {}),
+      ...(typeof migratedFullName === 'string' ? { fullName: migratedFullName } : {}),
+      ...(typeof migratedNickname === 'string' ? { nickname: migratedNickname } : {}),
+      ...(typeof migratedPawrent === 'string' ? { pawrentName: migratedPawrent } : {}),
+      ...(typeof migratedSignature === 'string' ? { signatureName: migratedSignature } : {}),
       stats: {
         gemoy: clampStat(parsed.stats?.gemoy, DEFAULT_DATA.stats.gemoy),
         nakal: clampStat(parsed.stats?.nakal, DEFAULT_DATA.stats.nakal),

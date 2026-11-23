@@ -108,6 +108,16 @@ export default function App() {
   // Upgrade 6: Real-time Clock Tick for Age Pill
   const [nowTick, setNowTick] = useState(() => new Date());
 
+  // Disable 3D cursor tilt on touch/mobile devices (< 768px or pointer: coarse)
+  const [isMobileOrTouch, setIsMobileOrTouch] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.innerWidth < 768 ||
+      (typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches)
+    );
+  });
+
   const stageWrapRef = useRef(null);
   const tiltCardRef = useRef(null);
   const exportNodeRef = useRef(null);
@@ -124,6 +134,7 @@ export default function App() {
   const springTiltY = useSpring(rawTiltY, { stiffness: 220, damping: 24 });
 
   const tiltEnabled =
+    !isMobileOrTouch &&
     !isFlipping &&
     !stampMode &&
     !isExporting &&
@@ -263,6 +274,27 @@ export default function App() {
   useEffect(() => {
     const timer = setInterval(() => setNowTick(new Date()), 60000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Track mobile / coarse-pointer state for disabling 3D tilt on phones/tablets
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mq =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(pointer: coarse)')
+        : null;
+
+    const updateMobileFlag = () => {
+      setIsMobileOrTouch(window.innerWidth < 768 || Boolean(mq?.matches));
+    };
+
+    updateMobileFlag();
+    window.addEventListener('resize', updateMobileFlag);
+    mq?.addEventListener?.('change', updateMobileFlag);
+    return () => {
+      window.removeEventListener('resize', updateMobileFlag);
+      mq?.removeEventListener?.('change', updateMobileFlag);
+    };
   }, []);
 
   // Flatten 3D Tilt & Foil Shimmer automatically during flip, stamp mode, export, or modals
@@ -738,10 +770,9 @@ export default function App() {
     () => computeBunnyAgeInfo(data.birthPlaceDate, nowTick),
     [data.birthPlaceDate, nowTick]
   );
-  const displayBunnyName =
-    data.nickname && data.nickname !== 'Mochi / Si Gembul'
-      ? data.nickname.split('/')[0].trim()
-      : 'Cimi';
+  const displayBunnyName = data.nickname
+    ? data.nickname.split('/')[0].trim()
+    : data.fullName || 'Cimi';
 
   return (
     <div
@@ -814,7 +845,7 @@ export default function App() {
 
         <div ref={stageWrapRef} className="w-full flex justify-center">
           <div
-            className="relative transition-all duration-200"
+            className={`relative ${isShaking ? 'animate-paper-thud' : ''}`}
             style={{
               width: `${scaledWidth}px`,
               height: `${scaledHeight}px`,
@@ -831,54 +862,82 @@ export default function App() {
               <div className="flip-scene w-full h-full">
                 <motion.div
                   ref={tiltCardRef}
-                  onPointerMove={handleCardPointerMove}
-                  onPointerLeave={handleCardPointerLeave}
-                  style={{
-                    rotateX: springTiltX,
-                    rotateY: springTiltY,
-                    transformStyle: 'preserve-3d',
-                  }}
-                  className="w-full h-full"
+                  onPointerMove={isMobileOrTouch ? undefined : handleCardPointerMove}
+                  onPointerLeave={isMobileOrTouch ? undefined : handleCardPointerLeave}
+                  style={
+                    isMobileOrTouch
+                      ? {
+                          WebkitTransformStyle: 'preserve-3d',
+                          transformStyle: 'preserve-3d',
+                        }
+                      : {
+                          rotateX: springTiltX,
+                          rotateY: springTiltY,
+                          WebkitTransformStyle: 'preserve-3d',
+                          transformStyle: 'preserve-3d',
+                        }
+                  }
+                  className="flip-tilt-layer w-full h-full"
                 >
-                  <div className={isShaking ? 'animate-paper-thud' : ''}>
+                  <div
+                    className={`flip-card rounded-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)] ${
+                      isFlipped ? 'is-flipped' : ''
+                    }`}
+                    style={{
+                      WebkitTransformStyle: 'preserve-3d',
+                      transformStyle: 'preserve-3d',
+                    }}
+                  >
+                    {/* Front Side */}
                     <div
-                      className={`flip-card rounded-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)] ${
-                        isFlipped ? 'is-flipped' : ''
+                      className={`flip-face flip-face-front ${
+                        isFlipped ? 'flip-face-hidden' : 'flip-face-visible'
                       }`}
+                      style={{
+                        WebkitBackfaceVisibility: 'hidden',
+                        backfaceVisibility: 'hidden',
+                      }}
+                      aria-hidden={isFlipped}
                     >
-                      {/* Front Side */}
-                      <div className="flip-face">
-                        <CertificateFront
-                          data={data}
-                          theme={theme}
-                          stampInkColor={stampInkColor}
-                          stampKey={stampKey}
-                          onPhotoClick={openFrontPhotoLightbox}
-                          customStamps={frontStamps}
-                          latestStampId={latestStampId}
-                          stampMode={stampMode}
-                          onPlaceStamp={handlePlaceStamp}
-                          petEvent={petEvent}
-                          feedEvent={feedEvent}
-                          onPet={handlePetCimi}
-                          onFeed={handleFeedCimi}
-                        />
-                      </div>
+                      <CertificateFront
+                        data={data}
+                        theme={theme}
+                        stampInkColor={stampInkColor}
+                        stampKey={stampKey}
+                        onPhotoClick={openFrontPhotoLightbox}
+                        customStamps={frontStamps}
+                        latestStampId={latestStampId}
+                        stampMode={stampMode}
+                        onPlaceStamp={handlePlaceStamp}
+                        petEvent={petEvent}
+                        feedEvent={feedEvent}
+                        onPet={handlePetCimi}
+                        onFeed={handleFeedCimi}
+                      />
+                    </div>
 
-                      {/* Back Side */}
-                      <div className="flip-face flip-face-back">
-                        <CertificateBack
-                          data={data}
-                          theme={theme}
-                          isAdmin={isAdmin}
-                          onGalleryClick={openGalleryLightbox}
-                          onOpenGalleryEdit={() => handleOpenEdit('photos')}
-                          customStamps={backStamps}
-                          latestStampId={latestStampId}
-                          stampMode={stampMode}
-                          onPlaceStamp={handlePlaceStamp}
-                        />
-                      </div>
+                    {/* Back Side */}
+                    <div
+                      className={`flip-face flip-face-back ${
+                        isFlipped ? 'flip-face-visible' : 'flip-face-hidden'
+                      }`}
+                      style={{
+                        WebkitBackfaceVisibility: 'hidden',
+                        backfaceVisibility: 'hidden',
+                      }}
+                      aria-hidden={!isFlipped}
+                    >
+                      <CertificateBack
+                        data={data}
+                        theme={theme}
+                        isAdmin={isAdmin}
+                        onGalleryClick={openGalleryLightbox}
+                        onOpenGalleryEdit={() => handleOpenEdit('photos')}
+                        customStamps={backStamps}
+                        latestStampId={latestStampId}
+                        stampMode={stampMode}
+                        onPlaceStamp={handlePlaceStamp}
+                      />
                     </div>
                   </div>
                 </motion.div>

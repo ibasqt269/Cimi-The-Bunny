@@ -33,21 +33,29 @@
     0 0;
 }
 
-/* 3D Card Flip Animation */
+/* 3D Card Flip Animation (Safari iOS / WebKit Bulletproof) */
 .flip-scene {
+  -webkit-perspective: 2200px;
   perspective: 2200px;
+}
+
+.flip-tilt-layer {
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
 
 .flip-card {
   position: relative;
   width: 1122px;
   height: 794px;
+  -webkit-transform-style: preserve-3d;
   transform-style: preserve-3d;
   transition: transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 
 .flip-card.is-flipped {
+  -webkit-transform: rotateY(180deg);
   transform: rotateY(180deg);
 }
 
@@ -56,12 +64,39 @@
   inset: 0;
   width: 1122px;
   height: 794px;
-  backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+}
+
+.flip-face-front {
+  -webkit-transform: rotateY(0deg) translateZ(1px);
+  transform: rotateY(0deg) translateZ(1px);
 }
 
 .flip-face-back {
-  transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg) translateZ(1px);
+  transform: rotateY(180deg) translateZ(1px);
+}
+
+/* Double-shield visibility swap right at the 90deg edge-on midpoint (~210-290ms) */
+.flip-face-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 0.08s linear 0.21s,
+    visibility 0s linear 0.21s;
+}
+
+.flip-face-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.08s linear 0.21s,
+    visibility 0s linear 0.29s;
 }
 
 /* Stamp slam + ink ripple + subtle desk thud */
