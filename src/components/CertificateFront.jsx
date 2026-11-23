@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ZoomIn } from 'lucide-react';
+import { Camera, Loader2, ZoomIn } from 'lucide-react';
 import CertificateFrame from './CertificateFrame.jsx';
 import {
   BarcodeSvg,
@@ -39,6 +39,9 @@ export default function CertificateFront({
   stampInkColor,
   stampKey = 0,
   isExport = false,
+  isAdmin = false,
+  uploadingCertTarget = '',
+  onDirectUploadPhoto,
   onPhotoClick,
   customStamps = [],
   latestStampId = null,
@@ -357,6 +360,14 @@ export default function CertificateFront({
                   </div>
                 )}
 
+                {/* Uploading Spinner Overlay (Mode Pawrent) */}
+                {!isExport && uploadingCertTarget === 'main' && (
+                  <div className="no-print print:hidden absolute inset-0 z-20 bg-slate-950/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1.5 text-white">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span className="text-[11px] font-bold">Mengunggah...</span>
+                  </div>
+                )}
+
                 {/* Corner Zoom Lightbox Trigger (conflict-free with petting) */}
                 {hasPhoto && !isExport && !stampMode && (
                   <button
@@ -365,7 +376,7 @@ export default function CertificateFront({
                       e.stopPropagation();
                       onPhotoClick?.();
                     }}
-                    className="no-print print:hidden absolute top-2 right-2 w-7 h-7 rounded-full bg-white/85 hover:bg-white text-slate-800 shadow flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity"
+                    className="no-print print:hidden absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-white/85 hover:bg-white text-slate-800 shadow flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity"
                     title="Perbesar Pas Foto"
                     aria-label="Perbesar Pas Foto"
                   >
@@ -373,7 +384,39 @@ export default function CertificateFront({
                   </button>
                 )}
 
-                {!isExport && !stampMode && !isDragOver && (
+                {/* Pawrent Quick "Ganti Foto" Button at Bottom Corner (conflict-free) */}
+                {isAdmin && !isExport && !stampMode && (
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerMove={(e) => e.stopPropagation()}
+                    className={`no-print print:hidden absolute bottom-2 right-2 z-20 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/85 hover:bg-slate-900 text-white text-[10px] font-bold shadow-md border border-white/25 transition-all ${
+                      uploadingCertTarget === 'main'
+                        ? 'opacity-70 cursor-wait'
+                        : 'cursor-pointer active:scale-95'
+                    }`}
+                    title="Langsung ganti Pas Foto Cimi"
+                  >
+                    {uploadingCertTarget === 'main' ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Camera className="w-3 h-3" />
+                    )}
+                    <span>{uploadingCertTarget === 'main' ? 'Upload...' : 'Ganti Foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={Boolean(uploadingCertTarget)}
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = '';
+                        if (f) onDirectUploadPhoto?.(f, 'main').catch(() => {});
+                      }}
+                    />
+                  </label>
+                )}
+
+                {!isExport && !stampMode && !isDragOver && !isAdmin && (
                   <div className="no-print print:hidden absolute inset-x-0 bottom-1.5 flex justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className="px-2.5 py-0.5 rounded-full bg-white/90 text-slate-800 text-[10px] font-bold shadow-sm">
                       Klik / usap untuk elus 💕

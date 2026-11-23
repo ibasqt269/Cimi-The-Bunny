@@ -90,6 +90,11 @@ export async function fetchCloudCertificate() {
 export async function saveCloudCertificate(certData) {
   if (!isSupabaseConfigured || !supabase) return false;
 
+  const { data: sessionRes } = await supabase.auth.getSession();
+  if (!sessionRes?.session) {
+    throw new Error('Sesi Mode Pawrent belum aktif atau sudah berakhir. Silakan login ulang.');
+  }
+
   const { error } = await supabase.from(CIMI_CERTIFICATE_TABLE).upsert(
     {
       id: CERTIFICATE_ROW_ID,
@@ -99,23 +104,33 @@ export async function saveCloudCertificate(certData) {
     { onConflict: 'id' }
   );
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Gagal menyimpan ke tabel cimi_certificate: ${error.message}`);
+  }
   return true;
 }
 
 /**
  * Upload a certificate image (Pas Foto or Back Mini Gallery slot) to Supabase Storage
- * and return its public URL.
+ * inside `cimi-photos/certificate/...` and return its public URL.
  */
 export async function uploadCertificateImageToCloud(file, slotKey = 'pas-foto') {
   if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Supabase belum dikonfigurasi.');
+    throw new Error('Supabase belum dikonfigurasi (.env belum diisi).');
   }
 
-  const { blob, format } = await optimizePhotoToBlob(file, 1200, 0.86);
+  const { data: sessionRes } = await supabase.auth.getSession();
+  if (!sessionRes?.session) {
+    throw new Error('Sesi Mode Pawrent belum aktif atau sudah berakhir. Silakan login ulang.');
+  }
+
+  const { blob, format } = await optimizePhotoToBlob(file, 1400, 0.88);
   const ext = getExtFromFormat(format, blob.type);
-  const safeKey = String(slotKey).replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
-  const storagePath = `certificate/${safeKey}-${Date.now()}-${Math.random()
+  const cleanKey =
+    slotKey === 'main'
+      ? 'pas-foto'
+      : String(slotKey).replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
+  const storagePath = `certificate/${cleanKey}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 7)}.${ext}`;
 
@@ -127,14 +142,18 @@ export async function uploadCertificateImageToCloud(file, slotKey = 'pas-foto') 
       upsert: false,
     });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    throw new Error(
+      `Gagal upload ke Supabase Storage (${CIMI_PHOTOS_BUCKET}): ${uploadError.message}`
+    );
+  }
 
   const { data: urlData } = supabase.storage
     .from(CIMI_PHOTOS_BUCKET)
     .getPublicUrl(storagePath);
 
   if (!urlData?.publicUrl) {
-    throw new Error('Gagal mendapatkan URL publik gambar.');
+    throw new Error('Gagal mendapatkan Public URL dari Supabase Storage.');
   }
 
   return urlData.publicUrl;

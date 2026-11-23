@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import html2canvas from 'html2canvas';
-import { Cake, CheckCircle2, RotateCw } from 'lucide-react';
+import { AlertCircle, Cake, CheckCircle2, RotateCw } from 'lucide-react';
 import CertificateBack from './components/CertificateBack.jsx';
 import CertificateFront from './components/CertificateFront.jsx';
 import CimiGalleryModal from './components/CimiGalleryModal.jsx';
@@ -41,6 +41,7 @@ import {
   loadIndexedDbPhotos,
   saveIndexedDbPhotos,
 } from './utils/cimiDb.js';
+import { compressImageFile } from './utils/imageHelper.js';
 import {
   getSfxEnabled,
   playCrunch,
@@ -63,7 +64,7 @@ export default function App() {
   const [stampKey, setStampKey] = useState(0);
   const [isShaking, setIsShaking] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
 
   const [lightboxState, setLightboxState] = useState(null);
   const [stageScale, setStageScale] = useState(1);
@@ -77,6 +78,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [uploadingCertTarget, setUploadingCertTarget] = useState('');
 
   const isAdmin = Boolean(session?.user);
   const pawrentEmail = session?.user?.email || '';
@@ -125,6 +127,8 @@ export default function App() {
   const flipTimerRef = useRef(null);
   const cloudSaveTimerRef = useRef(null);
   const dirtyCloudRef = useRef(false);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const cimiUrlCacheRef = useRef(new Map());
 
   // Upgrade 1: 3D Tilt Spring Motion Values
@@ -147,10 +151,13 @@ export default function App() {
   const stampInkColor =
     STAMP_INKS[data.stampInk]?.color || STAMP_INKS.red.color;
 
-  const showToast = useCallback((message) => {
-    setToast(message);
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(''), 3200);
+    toastTimerRef.current = setTimeout(
+      () => setToast(null),
+      type === 'error' ? 6000 : 3400
+    );
   }, []);
 
   // Persist changes to localStorage cache
@@ -242,9 +249,12 @@ export default function App() {
           dirtyCloudRef.current = false;
           setCloudSyncStatus('saved');
         })
-        .catch(() => {
+        .catch((err) => {
           setCloudSyncStatus('error');
-          showToast('Gagal menyimpan perubahan akta ke Supabase.');
+          showToast(
+            err?.message || 'Gagal menyimpan perubahan akta ke Supabase.',
+            'error'
+          );
         });
     }, 650);
 
@@ -454,6 +464,145 @@ export default function App() {
     [isAdmin]
   );
 
+  // Atomic immediate upload of Pas Foto or Mini Galeri slot to Supabase Storage + cimi_certificate
+  const handleUploadCertPhoto = useCallback(
+    async (file, target) => {
+      if (!isAdmin) {
+        const err = new Error('Silakan login Mode Pawrent terlebih dahulu untuk mengganti foto.');
+        showToast(err.message, 'error');
+        throw err;
+      }
+
+      setUploadingCertTarget(target);
+      try {
+        const publicUrl = isSupabaseConfigured
+          ? await uploadCertificateImageToCloud(file, target)
+          : await compressImageFile(file, 960, 0.84);
+
+        const prev = dataRef.current;
+        let nextData;
+        if (target === 'main') {
+          nextData = { ...prev, photo: publicUrl };
+        } else {
+          const idx = Number(target.replace('slot-', ''));
+          nextData = {
+            ...prev,
+            gallery: (prev.gallery || []).map((slot, i) =>
+              i === idx ? { ...slot, image: publicUrl } : slot
+            ),
+          };
+        }
+
+        // Update UI and local cache immediately
+        dataRef.current = nextData;
+        setData(nextData);
+        saveData(nextData);
+
+        if (isSupabaseConfigured) {
+          if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
+          dirtyCloudRef.current = false;
+          setCloudSyncStatus('saving');
+          await saveCloudCertificate(nextData);
+          setCloudSyncStatus('saved');
+        }
+
+        const label =
+          target === 'main'
+            ? 'Pas Foto Depan'
+            : `Foto Slot 0${Number(target.replace('slot-', '')) + 1}`;
+        showToast(
+          isSupabaseConfigured
+            ? `${label} berhasil di-upload & tersimpan permanen ke Supabase!`
+            : `${label} berhasil diperbarui!`
+        );
+        return publicUrl;
+      } catch (err) {
+        setCloudSyncStatus('error');
+        const msg = err?.message || 'Gagal mengunggah foto ke Supabase.';
+        showToast(msg, 'error');
+        throw err;
+      } finally {
+        setUploadingCertTarget('');
+      }
+    },
+    [isAdmin, showToast]
+  );
+
+  // Immediate cloud save when clearing/resetting Pas Foto or a Mini Gallery slot
+  const handleSetCertPhotoValue = useCallback(
+    async (target, value) => {
+      if (!isAdmin) return;
+      const prev = dataRef.current;
+      let nextData;
+      if (target === 'main') {
+        nextData = { ...prev, photo: value };
+      } else {
+        const idx = Number(target.replace('slot-', ''));
+        nextData = {
+          ...prev,
+          gallery: (prev.gallery || []).map((slot, i) =>
+            i === idx ? { ...slot, image: value } : slot
+          ),
+        };
+      }
+
+      dataRef.current = nextData;
+      setData(nextData);
+      saveData(nextData);
+
+      if (isSupabaseConfigured) {
+        try {
+          if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
+          dirtyCloudRef.current = false;
+          setCloudSyncStatus('saving');
+          await saveCloudCertificate(nextData);
+          setCloudSyncStatus('saved');
+          showToast('Perubahan foto tersimpan ke Supabase Cloud.');
+        } catch (err) {
+          setCloudSyncStatus('error');
+          showToast(err?.message || 'Gagal menyimpan perubahan foto ke Supabase.', 'error');
+          throw err;
+        }
+      }
+    },
+    [isAdmin, showToast]
+  );
+
+  // Immediate inline caption update on Back Mini Gallery slots
+  const handleUpdateCertGalleryCaption = useCallback(
+    async (slotIdx, caption) => {
+      if (!isAdmin) return;
+      const prev = dataRef.current;
+      const nextData = {
+        ...prev,
+        gallery: (prev.gallery || []).map((slot, i) =>
+          i === slotIdx ? { ...slot, caption } : slot
+        ),
+      };
+
+      dataRef.current = nextData;
+      setData(nextData);
+      saveData(nextData);
+
+      if (isSupabaseConfigured) {
+        try {
+          if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
+          dirtyCloudRef.current = false;
+          setCloudSyncStatus('saving');
+          await saveCloudCertificate(nextData);
+          setCloudSyncStatus('saved');
+          showToast(`Caption Foto 0${slotIdx + 1} tersimpan ke Supabase!`);
+        } catch (err) {
+          setCloudSyncStatus('error');
+          showToast(err?.message || 'Gagal menyimpan caption ke Supabase.', 'error');
+        }
+      } else {
+        showToast(`Caption Foto 0${slotIdx + 1} diperbarui.`);
+      }
+    },
+    [isAdmin, showToast]
+  );
+
   const handleOpenEdit = (tab = 'main') => {
     if (!isAdmin) return;
     setDrawerTab(tab);
@@ -465,14 +614,17 @@ export default function App() {
     if (isAdmin && isSupabaseConfigured && dirtyCloudRef.current) {
       if (cloudSaveTimerRef.current) clearTimeout(cloudSaveTimerRef.current);
       setCloudSyncStatus('saving');
-      saveCloudCertificate(data)
+      saveCloudCertificate(dataRef.current)
         .then(() => {
           dirtyCloudRef.current = false;
           setCloudSyncStatus('saved');
         })
-        .catch(() => {
+        .catch((err) => {
           setCloudSyncStatus('error');
-          showToast('Gagal menyimpan perubahan akta ke Supabase.');
+          showToast(
+            err?.message || 'Gagal menyimpan perubahan akta ke Supabase.',
+            'error'
+          );
         });
     }
   };
@@ -904,6 +1056,9 @@ export default function App() {
                         theme={theme}
                         stampInkColor={stampInkColor}
                         stampKey={stampKey}
+                        isAdmin={isAdmin}
+                        uploadingCertTarget={uploadingCertTarget}
+                        onDirectUploadPhoto={handleUploadCertPhoto}
                         onPhotoClick={openFrontPhotoLightbox}
                         customStamps={frontStamps}
                         latestStampId={latestStampId}
@@ -931,8 +1086,11 @@ export default function App() {
                         data={data}
                         theme={theme}
                         isAdmin={isAdmin}
+                        uploadingCertTarget={uploadingCertTarget}
+                        onDirectUploadPhoto={handleUploadCertPhoto}
+                        onUpdateGalleryCaption={handleUpdateCertGalleryCaption}
                         onGalleryClick={openGalleryLightbox}
-                        onOpenGalleryEdit={() => handleOpenEdit('photos')}
+                        onOpenGalleryEdit={() => handleOpenEdit('photos-gallery')}
                         customStamps={backStamps}
                         latestStampId={latestStampId}
                         stampMode={stampMode}
@@ -1044,7 +1202,9 @@ export default function App() {
         theme={theme}
         isCloudMode={isSupabaseConfigured}
         cloudSyncStatus={cloudSyncStatus}
-        onUploadCertImage={uploadCertificateImageToCloud}
+        uploadingCertTarget={uploadingCertTarget}
+        onUploadCertPhoto={handleUploadCertPhoto}
+        onSetCertPhotoValue={handleSetCertPhotoValue}
         onChange={handlePawrentDataChange}
         onReset={handleResetData}
         onClose={handleCloseEdit}
@@ -1089,11 +1249,22 @@ export default function App() {
         onHide={() => setShowWalker(false)}
       />
 
-      {/* Toast Notification */}
+      {/* Toast Notification (Success & Detailed Cloud Errors) */}
       {toast && (
-        <div className="no-print print:hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-slate-900/95 text-white text-xs sm:text-sm font-medium shadow-xl flex items-center gap-2 backdrop-blur-sm">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toast}</span>
+        <div
+          className={`no-print print:hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] px-4 py-2.5 rounded-2xl text-white text-xs sm:text-sm font-medium shadow-xl flex items-center gap-2 backdrop-blur-sm ${
+            toast.type === 'error'
+              ? 'bg-red-700/95 border border-red-400/50'
+              : 'bg-slate-900/95'
+          }`}
+          role="status"
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-red-200 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

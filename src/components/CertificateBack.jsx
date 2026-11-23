@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Camera,
   Carrot,
+  Check,
   Heart,
   ImagePlus,
+  Loader2,
+  Pencil,
   Sparkles,
+  X,
   Zap,
   ZoomIn,
 } from 'lucide-react';
@@ -42,6 +46,9 @@ export default function CertificateBack({
   theme,
   isExport = false,
   isAdmin = false,
+  uploadingCertTarget = '',
+  onDirectUploadPhoto,
+  onUpdateGalleryCaption,
   onGalleryClick,
   onOpenGalleryEdit,
   customStamps = [],
@@ -49,6 +56,8 @@ export default function CertificateBack({
   stampMode = false,
   onPlaceStamp,
 }) {
+  const [editingSlotIdx, setEditingSlotIdx] = useState(null);
+  const [captionDraft, setCaptionDraft] = useState('');
   const statsList = [
     {
       key: 'gemoy',
@@ -348,7 +357,22 @@ export default function CertificateBack({
         <div className="grid grid-cols-3 gap-5">
           {gallerySlots.map((slot, idx) => {
             const hasImage = Boolean(slot.image);
-            const canInteract = !isExport && (hasImage || isAdmin);
+            const slotKey = `slot-${idx}`;
+            const isSlotUploading = uploadingCertTarget === slotKey;
+            const canInteract = !isExport && !stampMode && (hasImage || isAdmin);
+            const isEditingCaption = isAdmin && !isExport && editingSlotIdx === idx;
+
+            const startCaptionEdit = (e) => {
+              e.stopPropagation();
+              setEditingSlotIdx(idx);
+              setCaptionDraft(slot.caption || '');
+            };
+
+            const commitCaption = () => {
+              onUpdateGalleryCaption?.(idx, captionDraft.trim() || `Dokumentasi ${idx + 1}`);
+              setEditingSlotIdx(null);
+            };
+
             return (
               <div
                 key={slot.id || idx}
@@ -358,14 +382,23 @@ export default function CertificateBack({
                   borderColor: theme.borderInner,
                 }}
               >
-                <button
-                  type="button"
-                  disabled={!canInteract}
+                <div
+                  role={canInteract ? 'button' : undefined}
+                  tabIndex={canInteract ? 0 : -1}
                   onClick={() => {
+                    if (!canInteract) return;
                     if (hasImage) {
                       onGalleryClick?.(idx);
                     } else if (isAdmin) {
                       onOpenGalleryEdit?.();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (!canInteract) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (hasImage) onGalleryClick?.(idx);
+                      else if (isAdmin) onOpenGalleryEdit?.();
                     }
                   }}
                   className={`group relative w-full h-[168px] overflow-hidden border ${
@@ -394,38 +427,116 @@ export default function CertificateBack({
                     <GalleryPlaceholderSvg index={idx} theme={theme} />
                   )}
 
-                  {canInteract && (
-                    <div className="no-print print:hidden absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+                  {/* Uploading Spinner Overlay */}
+                  {!isExport && isSlotUploading && (
+                    <div className="no-print print:hidden absolute inset-0 z-20 bg-slate-950/55 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1.5 text-white">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="text-[10.5px] font-bold">Mengunggah...</span>
+                    </div>
+                  )}
+
+                  {/* Hover Lightbox Pill (when photo exists) */}
+                  {canInteract && hasImage && !isSlotUploading && (
+                    <div className="no-print print:hidden absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center pointer-events-none">
                       <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 text-slate-900 text-[10.5px] font-semibold shadow">
-                        {hasImage ? (
-                          <>
-                            <ZoomIn className="w-3.5 h-3.5" />
-                            Lihat Foto
-                          </>
-                        ) : (
-                          <>
-                            <ImagePlus className="w-3.5 h-3.5" />
-                            Unggah Slot {idx + 1}
-                          </>
-                        )}
+                        <ZoomIn className="w-3.5 h-3.5" />
+                        Lihat Foto
                       </span>
                     </div>
                   )}
-                </button>
 
-                <div className="pt-1.5 px-1 flex items-center justify-between gap-2">
+                  {/* Pawrent Direct Quick Upload / Replace Photo Button */}
+                  {isAdmin && !isExport && !stampMode && !isSlotUploading && (
+                    <label
+                      onClick={(e) => e.stopPropagation()}
+                      className={`no-print print:hidden absolute bottom-2 right-2 z-20 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/85 hover:bg-slate-900 text-white text-[10px] font-bold shadow-md border border-white/25 transition-all ${
+                        uploadingCertTarget
+                          ? 'opacity-60 cursor-wait'
+                          : 'cursor-pointer active:scale-95'
+                      }`}
+                      title={hasImage ? `Ganti Foto 0${idx + 1}` : `Unggah Foto 0${idx + 1}`}
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>{hasImage ? 'Ganti Foto' : 'Unggah'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={Boolean(uploadingCertTarget)}
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          if (f) onDirectUploadPhoto?.(f, slotKey).catch(() => {});
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Caption Strip + Pawrent Inline Edit Caption */}
+                <div className="pt-1.5 px-1 flex items-center justify-between gap-1.5 min-h-[24px]">
                   <span
                     className="font-mono text-[9px] font-bold uppercase shrink-0"
                     style={{ color: theme.secondaryDark || theme.secondary }}
                   >
                     FOTO 0{idx + 1}
                   </span>
-                  <span
-                    className="text-[11px] font-medium truncate"
-                    style={{ color: theme.textMain }}
-                  >
-                    {slot.caption || `Dokumentasi ${idx + 1}`}
-                  </span>
+
+                  {isEditingCaption ? (
+                    <div
+                      className="no-print print:hidden flex-1 flex items-center gap-1 min-w-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="text"
+                        value={captionDraft}
+                        onChange={(e) => setCaptionDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitCaption();
+                          if (e.key === 'Escape') setEditingSlotIdx(null);
+                        }}
+                        autoFocus
+                        className="flex-1 min-w-0 px-1.5 py-0.5 text-[10.5px] rounded border border-slate-300 bg-white text-slate-800 outline-none"
+                        placeholder="Caption foto..."
+                      />
+                      <button
+                        type="button"
+                        onClick={commitCaption}
+                        className="p-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                        title="Simpan caption"
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSlotIdx(null)}
+                        className="p-0.5 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+                        title="Batal"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span
+                        className="text-[11px] font-medium truncate"
+                        style={{ color: theme.textMain }}
+                      >
+                        {slot.caption || `Dokumentasi ${idx + 1}`}
+                      </span>
+                      {isAdmin && !isExport && !stampMode && (
+                        <button
+                          type="button"
+                          onClick={startCaptionEdit}
+                          className="no-print print:hidden p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-black/5 shrink-0 transition-colors"
+                          title={`Edit caption Foto 0${idx + 1}`}
+                          aria-label={`Edit caption Foto 0${idx + 1}`}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
