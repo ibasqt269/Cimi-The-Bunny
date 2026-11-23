@@ -1,0 +1,200 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+  }
+}
+
+/* Subtle tactile paper grain (CSS-only so html2canvas renders accurately) */
+.paper-grain {
+  background-image:
+    radial-gradient(rgba(120, 95, 55, 0.035) 1px, transparent 0),
+    radial-gradient(rgba(80, 65, 45, 0.028) 1px, transparent 0),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.06) 0px,
+      rgba(255, 255, 255, 0.06) 1px,
+      rgba(160, 140, 110, 0.015) 1px,
+      rgba(160, 140, 110, 0.015) 3px
+    );
+  background-size:
+    18px 18px,
+    27px 27px,
+    100% 6px;
+  background-position:
+    0 0,
+    9px 13px,
+    0 0;
+}
+
+/* 3D Card Flip Animation */
+.flip-scene {
+  perspective: 2200px;
+}
+
+.flip-card {
+  position: relative;
+  width: 1122px;
+  height: 794px;
+  transform-style: preserve-3d;
+  transition: transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.flip-card.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.flip-face {
+  position: absolute;
+  inset: 0;
+  width: 1122px;
+  height: 794px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.flip-face-back {
+  transform: rotateY(180deg);
+}
+
+/* Stamp slam + ink ripple + subtle desk thud */
+@keyframes stampSlam {
+  0% {
+    opacity: 0;
+    transform: scale(2.6) rotate(-28deg);
+  }
+  42% {
+    opacity: 0.96;
+    transform: scale(0.92) rotate(-13deg);
+  }
+  68% {
+    opacity: 0.9;
+    transform: scale(1.04) rotate(-14.6deg);
+  }
+  100% {
+    opacity: 0.86;
+    transform: scale(1) rotate(-14deg);
+  }
+}
+
+@keyframes inkRipple {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.48);
+  }
+}
+
+@keyframes paperThud {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-2px, 2.5px, 0) rotate(-0.18deg);
+  }
+  45% {
+    transform: translate3d(2px, -1.8px, 0) rotate(0.15deg);
+  }
+  70% {
+    transform: translate3d(-1px, 1px, 0) rotate(-0.08deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-stamp-slam {
+  animation: stampSlam 0.48s cubic-bezier(0.2, 0.85, 0.32, 1.15) forwards;
+}
+
+.animate-ink-ripple {
+  animation: inkRipple 0.55s ease-out forwards;
+}
+
+.animate-paper-thud {
+  animation: paperThud 0.36s ease-out;
+}
+
+/* Custom Range Slider */
+input[type='range'].bun-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 7px;
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type='range'].bun-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #1b4332;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+input[type='range'].bun-range::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+
+/* Print / PDF exact 1-page A4 Landscape */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print,
+  .screen-only {
+    display: none !important;
+  }
+
+  .print-only {
+    display: flex !important;
+    width: 297mm !important;
+    height: 210mm !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-only-card {
+    transform: scale(0.994);
+    transform-origin: center center;
+  }
+}
